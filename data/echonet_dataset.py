@@ -11,6 +11,7 @@ DATA_DIR = '../'
 
 class EchoDataset(torch.utils.data.Dataset):
     def __init__(self, root=None,
+                 ssl=False,
                  split="train", target_type="EF",
                  mean=0., std=1.,
                  length=16, period=4,
@@ -26,7 +27,7 @@ class EchoDataset(torch.utils.data.Dataset):
         if root is None:
             root = DATA_DIR
             # print("DATASET ROOT: ", root + 'Videos')
-
+        self.ssl = ssl
         self.folder = pathlib.Path(root)
         self.split = split
         if not isinstance(target_type, list):
@@ -93,6 +94,11 @@ class EchoDataset(torch.utils.data.Dataset):
             keep = [len(self.frames[os.path.splitext(f)[0]]) >= 2 and f != "0X4F55DC7F6080587E.avi" for f in self.fnames]
             self.fnames = [f for (f, k) in zip(self.fnames, keep) if k]
             self.outcome = [f for (f, k) in zip(self.outcome, keep) if k]
+            
+            # if ssl == False and split == 'train':
+            #     self.fnames = self.fnames[:int(0.2 * len(self.fnames))]
+            #     self.outcome = self.outcome[:int(0.2 * len(self.outcome))]
+            
 
     def __getitem__(self, index):
 
@@ -104,7 +110,7 @@ class EchoDataset(torch.utils.data.Dataset):
             # print(self.fnames[index])
             video = os.path.join(self.folder, "Videos", self.fnames[index])
         video = loadvideo(video)
-        # print(video.shape)
+        # print("video shape: ", video.shape)
 
         if self.noise is not None:
             n = video.shape[1] * video.shape[2] * video.shape[3]
@@ -130,6 +136,7 @@ class EchoDataset(torch.utils.data.Dataset):
             length = self.length
 
         length = min(length, self.max_length)
+        # print("length: ", length)
 
         if f < length * self.period:
             # Pad video with frames filled with zeros if too short
@@ -140,6 +147,12 @@ class EchoDataset(torch.utils.data.Dataset):
             start = np.arange(f - (length - 1) * self.period)
         else:
             start = np.random.choice(f - (length - 1) * self.period, self.crops)
+            start2 = [s + 3 for s in start]
+            # start = np.random.choice(f - (length - 1) * self.period, self.crops)
+            # start2 = start + (length) * self.period
+            # start2 = np.random.choice(f - (length - 1) * self.period, self.crops)
+            # print("video start: ", start)
+            # print("video2 start: ", start2)
 
         target = []
         for t in self.target_type:
@@ -183,11 +196,20 @@ class EchoDataset(torch.utils.data.Dataset):
                 target = self.target_transform(target)
 
         # Select random crops
-        video = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start)
+        video1 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start)
+        if self.ssl == True:
+            try:
+                video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
+            except:
+                start2 = [s - 3 for s in start]
+                video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
+
         if self.crops == 1:
-            video = video[0]
+            video = video1[0]
+            if self.ssl == True:
+                video2 = video2[0]
         else:
-            video = np.stack(video)
+            video = np.stack(video1)
 
         if self.pad is not None:
             c, l, h, w = video.shape
@@ -195,7 +217,16 @@ class EchoDataset(torch.utils.data.Dataset):
             temp[:, :, self.pad:-self.pad, self.pad:-self.pad] = video
             i, j = np.random.randint(0, 2 * self.pad, 2)
             video = temp[:, :, i:(i + h), j:(j + w)]
+            if self.ssl == True:
+                c, l, h, w = video2.shape
+                temp = np.zeros((c, l, h + 2 * self.pad, w + 2 * self.pad), dtype=video2.dtype)
+                temp[:, :, self.pad:-self.pad, self.pad:-self.pad] = video2
+                i, j = np.random.randint(0, 2 * self.pad, 2)
+                video2 = temp[:, :, i:(i + h), j:(j + w)]
 
+        if self.ssl == True:
+            return video, video2, target
+        
         return video, target
 
     def __len__(self):
@@ -211,7 +242,7 @@ def _defaultdict_of_lists():
 def get_mean_and_std(dataset, split, samples=10):
     if len(dataset) > samples:
         dataset = torch.utils.data.Subset(dataset, np.random.choice(len(dataset), samples, replace=False))
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=8, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=0, shuffle=True)
 
     n = 0
     mean = 0.
@@ -232,7 +263,7 @@ def get_mean_and_std(dataset, split, samples=10):
 
     return mean, std
 
-def get_train_and_test_echonet_datasets(tasks="EF", frames=16, period=4):
+def get_train_and_test_echonet_datasets(tasks="EF", frames=16, period=4, ssl=False):
     """
     Returns training and validation datasets constructed from
     echonet dataset
@@ -247,10 +278,10 @@ def get_train_and_test_echonet_datasets(tasks="EF", frames=16, period=4):
               "length": frames,
               "period": period,
               }
+    print(frames, period)
+    dataset_train = EchoDataset(ssl=ssl, split="train", **kwargs, pad=12)
 
-    dataset_train = EchoDataset(split="train", **kwargs, pad=12)
-
-    mean, std = get_mean_and_std(EchoDataset(split="test"), 'test')
+    # mean, std = get_mean_and_std(EchoDataset(split="val"), 'val')
 
     kwargs = {"target_type": tasks,
               "mean": mean,
@@ -259,9 +290,20 @@ def get_train_and_test_echonet_datasets(tasks="EF", frames=16, period=4):
               "period": period,
               }
 
-    dataset_test = EchoDataset(split="test", **kwargs, pad=12)
+    dataset_val = EchoDataset(ssl=ssl, split="val", **kwargs, pad=12)
 
-    return dataset_train, dataset_test
+    # mean, std = get_mean_and_std(EchoDataset(split="test"), 'test')
+
+    kwargs = {"target_type": tasks,
+              "mean": mean,
+              "std": std,
+              "length": frames,
+              "period": period,
+              }
+
+    dataset_test = EchoDataset(ssl=ssl, split="test", **kwargs, pad=12)
+
+    return dataset_train, dataset_val, dataset_test
 
 def loadvideo(filename):
     if not os.path.exists(filename):

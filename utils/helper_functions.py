@@ -12,13 +12,15 @@ matplotlib.use('agg')
 to_pil_image = transforms.ToPILImage()
 to_tensor = transforms.ToTensor()
 
-def get_next_model_folder(prefix, path = ''):
+def get_next_model_folder(prefix, path = '', run=None):
 
     model_folder = lambda prefix, run_idx: f"{prefix}_echonet_run_{run_idx}"
-
-    run_idx = 1
-    while os.path.isdir(os.path.join(path, model_folder(prefix, run_idx))):
-        run_idx += 1
+    if run == None:
+        run_idx = 1
+        while os.path.isdir(os.path.join(path, model_folder(prefix, run_idx))):
+            run_idx += 1
+    else:
+        run_idx = run
 
     model_path = os.path.join(path, model_folder(prefix, run_idx))
     print(f"STARTING {prefix} RUN {run_idx}! Storing the models at {model_path}")
