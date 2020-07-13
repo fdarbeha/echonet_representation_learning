@@ -54,6 +54,19 @@ def get_image_patch_tensor_from_video_batch(img_batch):
     # print(len(all_frames_list))
     return all_frames_list
 
+def reshape_videos_cnn_input(video_batch): 
+    batch_size, C, D, H, W = video_batch.shape
+    
+    all_frames_list = []
+    for i in range(batch_size): #batch_size
+        for j in range(D):
+            all_frames_list.append(video_batch[i, :, j, :, :])
+
+    all_frames_tensor = torch.stack(all_frames_list, dim=0)
+    # print(all_frames_tensor.shape)
+    return all_frames_tensor
+
+
 def write_csv_stats(csv_path, stats_dict):
 
     if not os.path.isfile(csv_path):

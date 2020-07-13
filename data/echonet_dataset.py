@@ -7,7 +7,7 @@ import skimage.draw
 import tqdm
 import cv2
 
-DATA_DIR = '../'
+DATA_DIR = '/home/fdarbeha/projects/def-wanglab/EchoNet/data'
 
 class EchoDataset(torch.utils.data.Dataset):
     def __init__(self, root=None,
@@ -95,9 +95,9 @@ class EchoDataset(torch.utils.data.Dataset):
             self.fnames = [f for (f, k) in zip(self.fnames, keep) if k]
             self.outcome = [f for (f, k) in zip(self.outcome, keep) if k]
             
-            # if ssl == False and split == 'train':
-            #     self.fnames = self.fnames[:int(0.2 * len(self.fnames))]
-            #     self.outcome = self.outcome[:int(0.2 * len(self.outcome))]
+            if ssl == False and split == 'train':
+                self.fnames = self.fnames[:int(0.6 * len(self.fnames))]
+                self.outcome = self.outcome[:int(0.6 * len(self.outcome))]
             
 
     def __getitem__(self, index):
@@ -224,9 +224,11 @@ class EchoDataset(torch.utils.data.Dataset):
                 i, j = np.random.randint(0, 2 * self.pad, 2)
                 video2 = temp[:, :, i:(i + h), j:(j + w)]
 
+        
+        target = 1 if target < 50 else 0
         if self.ssl == True:
             return video, video2, target
-        
+
         return video, target
 
     def __len__(self):

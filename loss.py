@@ -4,22 +4,25 @@ import numpy as np
 
 class NTXentLoss(torch.nn.Module):
 
-    def __init__(self, device, batch_size, temperature, use_cosine_similarity, use_bilinear_similarity):
+    def __init__(self, device, batch_size, temperature, similarity='cosine', rep_dim=256):
         super(NTXentLoss, self).__init__()
         self.batch_size = batch_size
         self.temperature = temperature
         self.device = device
         self.softmax = torch.nn.Softmax(dim=-1)
         self.mask_samples_from_same_repr = self._get_correlated_mask().type(torch.bool)
-        self.similarity_function = self._get_similarity_function(use_cosine_similarity)
+        self.similarity_function = self._get_similarity_function(similarity)
         self.criterion = torch.nn.CrossEntropyLoss(reduction="sum")
-        if use_bilinear_similarity:
-            self.W = torch.randn(1, 1) #Fix this
+        if similarity == 'bilinear':
+            self.rep_dim = rep_dim
+            self.W = torch.randn(rep_dim, rep_dim).to(device)
 
-    def _get_similarity_function(self, use_cosine_similarity):
-        if use_cosine_similarity:
+    def _get_similarity_function(self, similarity):
+        if similarity == 'cosine':
             self._cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
             return self._cosine_simililarity
+        if similarity == 'bilinear':
+            return self._bilinear_inner_product
         else:
             return self._dot_simililarity
 
@@ -39,7 +42,14 @@ class NTXentLoss(torch.nn.Module):
         # v shape: (N, 2N)
         return v
 
-    def _bilinear_inner_product(x, y):
+    def _bilinear_inner_product(self, x, y):
+        # x shape: (2N, C)
+        # y shape: (2N, C)
+        # v shape: (2N, 2N)
+        # print("bilinear loss")
+        v = torch.matmul(self.W, x.T) # C, 2N
+        v = torch.matmul(y, v) #(2N ,2N)
+        return v
 
     def _cosine_simililarity(self, x, y):
         # x shape: (N, 1, C)

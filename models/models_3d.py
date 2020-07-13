@@ -51,12 +51,13 @@ class LinearRegressor(nn.Module):
 		self.num_ftrs = num_ftrs
 		self.regressor1 = nn.Linear(self.num_ftrs, 1)
 		self.regressor2 = nn.Linear(z_dimension, 1)
+		self.activation = nn.Sigmoid()
 
 	@autocast()
 	def forward(self, x):
 		# out = x.view(-1)
 		out = x
-		out = self.regressor1(out)
+		out = self.activation(self.regressor1(out))
 
 		return out
 
