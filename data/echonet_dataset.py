@@ -35,7 +35,10 @@ class EchoDataset(torch.utils.data.Dataset):
         self.target_type = target_type
         self.mean = mean
         self.std = std
-        self.length = length
+        if ssl == True:
+                self.length = 1
+        else:
+            self.length = length
         self.max_length = max_length
         self.period = period
         self.crops = crops
@@ -94,10 +97,10 @@ class EchoDataset(torch.utils.data.Dataset):
             keep = [len(self.frames[os.path.splitext(f)[0]]) >= 2 and f != "0X4F55DC7F6080587E.avi" for f in self.fnames]
             self.fnames = [f for (f, k) in zip(self.fnames, keep) if k]
             self.outcome = [f for (f, k) in zip(self.outcome, keep) if k]
-            
+
             if ssl == False and split == 'train':
-                self.fnames = self.fnames[:int(0.6 * len(self.fnames))]
-                self.outcome = self.outcome[:int(0.6 * len(self.outcome))]
+                self.fnames = self.fnames[:int(0.2 * len(self.fnames))]
+                self.outcome = self.outcome[:int(0.2 * len(self.outcome))]
             
 
     def __getitem__(self, index):
@@ -148,6 +151,7 @@ class EchoDataset(torch.utils.data.Dataset):
         else:
             start = np.random.choice(f - (length - 1) * self.period, self.crops)
             start2 = [s + 3 for s in start]
+            start3 = [s + 6 for s in start]
             # start = np.random.choice(f - (length - 1) * self.period, self.crops)
             # start2 = start + (length) * self.period
             # start2 = np.random.choice(f - (length - 1) * self.period, self.crops)
@@ -200,14 +204,18 @@ class EchoDataset(torch.utils.data.Dataset):
         if self.ssl == True:
             try:
                 video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
+                video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
             except:
                 start2 = [s - 3 for s in start]
                 video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
+                start3 = [s - 6 for s in start]
+                video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
 
         if self.crops == 1:
             video = video1[0]
             if self.ssl == True:
                 video2 = video2[0]
+                video3 = video3[0]
         else:
             video = np.stack(video1)
 
@@ -224,10 +232,16 @@ class EchoDataset(torch.utils.data.Dataset):
                 i, j = np.random.randint(0, 2 * self.pad, 2)
                 video2 = temp[:, :, i:(i + h), j:(j + w)]
 
+                c, l, h, w = video3.shape
+                temp = np.zeros((c, l, h + 2 * self.pad, w + 2 * self.pad), dtype=video3.dtype)
+                temp[:, :, self.pad:-self.pad, self.pad:-self.pad] = video3
+                i, j = np.random.randint(0, 2 * self.pad, 2)
+                video3 = temp[:, :, i:(i + h), j:(j + w)]
+
         
         target = 1 if target < 50 else 0
         if self.ssl == True:
-            return video, video2, target
+            return video, video2, video3, target
 
         return video, target
 

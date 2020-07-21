@@ -24,7 +24,7 @@ from torch.cuda.amp import GradScaler, autocast
 # from utils import utils 
 # from lib import radam
 from loss import NTXentLoss
-from utils.helper_functions import get_next_model_folder, inspect_model, reshape_videos_cnn_input
+from utils.helper_functions import get_next_model_folder, inspect_model, reshape_videos_cnn_input, reshape_videos_cnn_input_eval
 from utils.helper_functions import get_image_patch_tensor_from_video_batch, write_csv_stats
 from utils.helper_classes import AverageMeter, GaussianBlur
 from data.echonet_dataset import get_train_and_test_echonet_datasets
@@ -36,23 +36,24 @@ print(torch.__version__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 s=1
-video_transform_list = [video_transforms.RandomRotation(15),
-                        # video_transforms.RandomCrop((50, 50)),
-                        # video_transforms.RandomResize((112, 112)),
-                        video_transforms.RandomHorizontalFlip(),
-                        video_transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s),
-                        volume_transforms.ClipToTensor(3, 3)]
+# video_transform_list = [video_transforms.RandomRotation(15),
+#                         video_transforms.RandomCrop((50, 50)),
+#                         video_transforms.Resize((112, 112)),
+#                         video_transforms.RandomHorizontalFlip(),
+#                         video_transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s),
+#                         volume_transforms.ClipToTensor(3, 3)]
 
-data_augment = video_transforms.Compose(video_transform_list)
+# data_augment = video_transforms.Compose(video_transform_list)
 
-# color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
-# data_augment = transforms.Compose([transforms.ToPILImage(),
-#                                    transforms.RandomResizedCrop(32),
-#                                    transforms.RandomHorizontalFlip(),
-#                                    transforms.RandomApply([color_jitter], p=0.8),
-#                                    transforms.RandomGrayscale(p=0.2),
-#                                    GaussianBlur(),
-#                                    transforms.ToTensor()])
+color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
+data_augment = transforms.Compose([transforms.ToPILImage(),
+                                   transforms.RandomResizedCrop(50),
+                                   transforms.Resize((112, 112)),
+                                   transforms.RandomHorizontalFlip(),
+                                   transforms.RandomApply([color_jitter], p=0.8),
+                                   transforms.RandomGrayscale(p=0.2),
+                                   GaussianBlur(),
+                                   transforms.ToTensor()])
 
 def dataloader(batch_size, mode, args):
     trainloader, valloader, testloader = None, None, None
@@ -70,9 +71,9 @@ def dataloader(batch_size, mode, args):
         trainloader = data.DataLoader(trainset, batch_size=batch_size, \
                                     shuffle = True, num_workers=args.num_workers, drop_last=True)
         valloader  = data.DataLoader(valset, batch_size=batch_size, \
-                                    shuffle = False, num_workers=6, drop_last=True)
+                                    shuffle = False, num_workers=5, drop_last=True)
         testloader  = data.DataLoader(testset, batch_size=batch_size, \
-                                    shuffle = False, num_workers=6, drop_last=True)
+                                    shuffle = False, num_workers=5, drop_last=True)
 
     return trainloader, valloader, testloader
 
@@ -264,7 +265,7 @@ def train_2d_net(net, epoch, criterion, optimizer, trainloader, scaler):
         labels = labels.to(device)
 
         optimizer.zero_grad()
-        inputs = reshape_videos_cnn_input(inputs)
+        inputs = reshape_videos_cnn_input_eval(inputs)
         
         with torch.set_grad_enabled(True):
             # with autocast(False):
@@ -301,7 +302,7 @@ def eval_2d_net(net, epoch, criterion, testloader):
     for (i, (inputs, labels)) in enumerate(tqdm.tqdm(testloader)): 
         inputs = inputs.to(device)        
         labels = labels.to(device)
-        inputs = reshape_videos_cnn_input(inputs)
+        inputs = reshape_videos_cnn_input_eval(inputs)
 
         
         with torch.set_grad_enabled(False):
@@ -325,25 +326,45 @@ def Simclr_2d(net, epoch, criterion, optimizer, trainloader, scaler):
     net.train()
 
     # for (i, (inputs, _, labels)) in enumerate(trainloader):
-    for (i, (inputs1, inputs2, labels)) in enumerate(tqdm.tqdm(trainloader)): 
+    for (i, (inputs1, inputs2, inputs3, labels)) in enumerate(tqdm.tqdm(trainloader)): 
         inputs1 = inputs1.to(device)
         inputs2 = inputs2.to(device)         
         labels = labels.to(device)
 
+
         optimizer.zero_grad()
-        inputs1 = reshape_videos_cnn_input(inputs1)
-        inputs2 = reshape_videos_cnn_input(inputs2)
+        inputs1 = inputs1.squeeze()#reshape_videos_cnn_input(inputs1)
+        inputs2 = inputs2.squeeze()#reshape_videos_cnn_input(inputs2)
+        # inputs3 = inputs3.squeeze()
+
         
+        # x_1 = torch.zeros_like(inputs1).cuda()
+        # x_2 = torch.zeros_like(inputs2).cuda()
+        # x_3 = torch.zeros_like(inputs3).cuda()
+
+        # for idx, (x1, x2, x3) in enumerate(zip(inputs1, inputs2, inputs3)):
+        #     x_1[idx] = data_augment(x1).to(device)
+        #     x_2[idx] = data_augment(x2).to(device)
+        #     x_3[idx] = data_augment(x3).to(device)
+
+
+
         with torch.set_grad_enabled(True):
             # with autocast(False):
             _, out_1 = net(inputs1)
             _, out_2 = net(inputs2)
+            # _, out_3 = net(inputs3)
 
             out_1 = F.normalize(out_1, dim=1)
             out_2 = F.normalize(out_2, dim=1)
+            # out_3 = F.normalize(out_3, dim=1)
 
 
             loss = criterion(out_1.float(), out_2.float())
+            # loss2 = criterion(out_2.float(), out_3.float())
+            # loss3 = criterion(out_1.float(), out_3.float())
+
+            # loss = loss1 + loss2 + loss3
 
             loss.backward()
             optimizer.step()
@@ -717,8 +738,8 @@ if __name__ == "__main__":
             if device.type == "cuda":
                 net = torch.nn.DataParallel(net)
         
-            # criterion = losses.NTXentLoss(temperature=args.tau)
-            criterion = NTXentLoss(device, args.batch_size * args.frame_num, args.tau,\
+            # criterion = losses.NTXentLoss(temperature=args.tau) * args.frame_num
+            criterion = NTXentLoss(device, args.batch_size , args.tau,\
              args.similarity, args.projection_size).to(device)
             optim_ssl = optimizer(net, args)
 
@@ -774,12 +795,12 @@ if __name__ == "__main__":
                 net = net.to(device)
 
             criterion = torch.nn.BCELoss()
-            optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9, weight_decay=1e-4)
+            optimizer = optim.SGD(net.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-4)
             scaler = GradScaler()
 
             epoch_start = 0
             bestLoss = float("inf")
-            # load_model(model_store_folder, args.checkpoint, net, "best_simclr_2d_900", optim=None, csv_path = regressor_stats_csv_path)
+            load_model(model_store_folder, args.checkpoint, net, "best_simclr_2d_200", optim=None, csv_path = regressor_stats_csv_path)
             # epoch_start = load_model(model_store_folder, args.checkpoint, regressor, "best_regressor", optim=reg_optimizer, csv_path = regressor_stats_csv_path)
 
             print("\nStart training 2d classifier!\n")

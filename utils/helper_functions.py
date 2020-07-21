@@ -60,11 +60,27 @@ def reshape_videos_cnn_input(video_batch):
     all_frames_list = []
     for i in range(batch_size): #batch_size
         for j in range(D):
+            print(video_batch[i, :, j, :, :].shape)
+            all_frames_list.append(video_batch[i, :, j, :, :])
+            # all_frames_list.append(to_pil_image(video_batch[i, :, j, :, :]))
+
+    # all_frames_tensor = torch.stack(all_frames_list, dim=0)
+    # print(all_frames_tensor.shape)
+    # return all_frames_tensor
+    return all_frames_list
+
+def reshape_videos_cnn_input_eval(video_batch): 
+    batch_size, C, D, H, W = video_batch.shape
+    
+    all_frames_list = []
+    for i in range(batch_size): #batch_size
+        for j in range(D):
             all_frames_list.append(video_batch[i, :, j, :, :])
 
     all_frames_tensor = torch.stack(all_frames_list, dim=0)
     # print(all_frames_tensor.shape)
     return all_frames_tensor
+    # return all_frames_list
 
 
 def write_csv_stats(csv_path, stats_dict):

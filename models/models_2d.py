@@ -11,7 +11,7 @@ from torch.cuda.amp import autocast
 
 
 class Encoder(nn.Module):
-	def __init__(self, model='resnet18', pretrained=True, z_dimension=128):
+	def __init__(self, model='resnet18', pretrained=False, z_dimension=128):
 		super(Encoder, self).__init__()
 		
 		net = models.__dict__[model](pretrained=pretrained)
