@@ -36,24 +36,24 @@ print(torch.__version__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 s=1
-# video_transform_list = [video_transforms.RandomRotation(15),
-#                         video_transforms.RandomCrop((50, 50)),
-#                         video_transforms.Resize((112, 112)),
-#                         video_transforms.RandomHorizontalFlip(),
-#                         video_transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s),
-#                         volume_transforms.ClipToTensor(3, 3)]
+video_transform_list = [video_transforms.RandomRotation(15),
+                        video_transforms.RandomCrop((50, 50)),
+                        video_transforms.Resize((112, 112)),
+                        video_transforms.RandomHorizontalFlip(),
+                        video_transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s),
+                        volume_transforms.ClipToTensor(3, 3)]
 
-# data_augment = video_transforms.Compose(video_transform_list)
+data_augment = video_transforms.Compose(video_transform_list)
 
-color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
-data_augment = transforms.Compose([transforms.ToPILImage(),
-                                   transforms.RandomResizedCrop(50),
-                                   transforms.Resize((112, 112)),
-                                   transforms.RandomHorizontalFlip(),
-                                   transforms.RandomApply([color_jitter], p=0.8),
-                                   transforms.RandomGrayscale(p=0.2),
-                                   GaussianBlur(),
-                                   transforms.ToTensor()])
+# color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
+# data_augment = transforms.Compose([transforms.ToPILImage(),
+#                                    transforms.RandomResizedCrop(50),
+#                                    transforms.Resize((112, 112)),
+#                                    transforms.RandomHorizontalFlip(),
+#                                    transforms.RandomApply([color_jitter], p=0.8),
+#                                    transforms.RandomGrayscale(p=0.2),
+#                                    GaussianBlur(),
+#                                    transforms.ToTensor()])
 
 def dataloader(batch_size, mode, args):
     trainloader, valloader, testloader = None, None, None
@@ -321,50 +321,70 @@ def eval_2d_net(net, epoch, criterion, testloader):
     return loss_meter.average(), auc
 
 
-def Simclr_2d(net, epoch, criterion, optimizer, trainloader, scaler):
+def Simclr_2d(net, epoch, criterion, criterion2, criterion3, criterion4,
+                criterion5, optimizer, trainloader, scaler):
     loss_meter = AverageMeter()
     net.train()
 
     # for (i, (inputs, _, labels)) in enumerate(trainloader):
-    for (i, (inputs1, inputs2, inputs3, labels)) in enumerate(tqdm.tqdm(trainloader)): 
-        inputs1 = inputs1.to(device)
-        inputs2 = inputs2.to(device)         
+    for (i, (inputs1, inputs2, inputs3, inputs4, inputs5, inputs6, labels)) in enumerate(tqdm.tqdm(trainloader)): 
+        # inputs1 = inputs1.to(device)
+        # inputs2 = inputs2.to(device)         
         labels = labels.to(device)
 
 
         optimizer.zero_grad()
         inputs1 = inputs1.squeeze()#reshape_videos_cnn_input(inputs1)
         inputs2 = inputs2.squeeze()#reshape_videos_cnn_input(inputs2)
-        # inputs3 = inputs3.squeeze()
+        inputs3 = inputs3.squeeze()
+        inputs4 = inputs4.squeeze()
+        inputs5 = inputs5.squeeze()
+        inputs6 = inputs6.squeeze()
 
         
-        # x_1 = torch.zeros_like(inputs1).cuda()
-        # x_2 = torch.zeros_like(inputs2).cuda()
-        # x_3 = torch.zeros_like(inputs3).cuda()
+        x_1 = torch.zeros_like(inputs1).cuda()
+        x_2 = torch.zeros_like(inputs2).cuda()
+        x_3 = torch.zeros_like(inputs3).cuda()
+        x_4 = torch.zeros_like(inputs4).cuda()
+        x_5 = torch.zeros_like(inputs5).cuda()
+        x_6 = torch.zeros_like(inputs6).cuda()
 
-        # for idx, (x1, x2, x3) in enumerate(zip(inputs1, inputs2, inputs3)):
-        #     x_1[idx] = data_augment(x1).to(device)
-        #     x_2[idx] = data_augment(x2).to(device)
-        #     x_3[idx] = data_augment(x3).to(device)
+        for idx, (x1, x2, x3, x4, x5, x6) in enumerate(zip(inputs1, inputs2, \
+                                                    inputs3, inputs4, inputs5, inputs6)):
+            x_1[idx] = data_augment(x1).to(device)
+            x_2[idx] = data_augment(x2).to(device)
+            x_3[idx] = data_augment(x3).to(device)
+            x_4[idx] = data_augment(x4).to(device)
+            x_5[idx] = data_augment(x5).to(device)
+            x_6[idx] = data_augment(x6).to(device)
 
 
 
         with torch.set_grad_enabled(True):
             # with autocast(False):
-            _, out_1 = net(inputs1)
-            _, out_2 = net(inputs2)
-            # _, out_3 = net(inputs3)
+            _, out_1 = net(x_1)
+            _, out_2 = net(x_2)
+            _, out_3 = net(x_3)
+            _, out_4 = net(x_4)
+            _, out_5 = net(x_5)
+            _, out_6 = net(x_6)
 
             out_1 = F.normalize(out_1, dim=1)
             out_2 = F.normalize(out_2, dim=1)
-            # out_3 = F.normalize(out_3, dim=1)
+            out_3 = F.normalize(out_3, dim=1)
+            out_4 = F.normalize(out_4, dim=1)
+            out_5 = F.normalize(out_5, dim=1)
+            out_6 = F.normalize(out_6, dim=1)
 
 
-            loss = criterion(out_1.float(), out_2.float())
+            loss1 = criterion(out_1.float(), out_2.float())
             # loss2 = criterion(out_2.float(), out_3.float())
-            # loss3 = criterion(out_1.float(), out_3.float())
+            loss2 = criterion2(out_1.float(), out_3.float())
+            loss3 = criterion3(out_1.float(), out_4.float()) 
+            loss4 = criterion4(out_1.float(), out_5.float())
+            loss5 = criterion5(out_1.float(), out_6.float())
 
-            # loss = loss1 + loss2 + loss3
+            loss = loss1 + loss2 + loss3 + loss4 + loss5
 
             loss.backward()
             optimizer.step()
@@ -439,15 +459,15 @@ def SimCLR(net, epoch, criterion_ssl, optimizer, trainloader, args,\
         for (i, (b1, b2, *_)) in enumerate(tqdm.tqdm(trainloader)):
 
             optimizer.zero_grad()
-            x_1 = b1#torch.zeros_like(b1).cuda()
-            x_2 = b2#torch.zeros_like(b2).cuda()
+            x_1 = torch.zeros_like(b1).cuda()
+            x_2 = torch.zeros_like(b2).cuda()
             with autocast():
-                # for idx, (x1, x2) in enumerate(zip(b1, b2)):
-                #     x1 = get_image_patch_tensor_from_video_batch(x1)
-                #     x2 = get_image_patch_tensor_from_video_batch(x2)
+                for idx, (x1, x2) in enumerate(zip(b1, b2)):
+                    x1 = get_image_patch_tensor_from_video_batch(x1)
+                    x2 = get_image_patch_tensor_from_video_batch(x2)
 
-                #     x_1[idx] = data_augment(x1)
-                #     x_2[idx] = data_augment(x2)
+                    x_1[idx] = data_augment(x1)
+                    x_2[idx] = data_augment(x2)
 
                 _, out_1 = net(x_1.to(device))
                 _, out_2 = net(x_2.to(device))
@@ -535,9 +555,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     # model related arguments
-    parser.add_argument('--encoder_model', default='r3d_18') #r2plus1d_18
+    parser.add_argument('--encoder_model', default='r2plus1d_18') #r2plus1d_18 'r3d_18'
     parser.add_argument('--encoder_pretrained', default=False)
     parser.add_argument('--mode', default='ssl')
+    parser.add_argument('--type', default='ssl')
     parser.add_argument('--projection_size', default=128, type=int)
     parser.add_argument('--similarity', default='cosine')
     parser.add_argument('--run', default=None, type=int, help='epoch to use weights')
@@ -577,9 +598,9 @@ if __name__ == "__main__":
     if not os.path.isdir(output_folder):
         os.mkdir(output_folder)
 
-    pretrain_str = 'pretrained' if args.encoder_pretrained == True else 'random'
+    pretrain_str = 'pretrained' if args.encoder_pretrained else 'random'
     model_store_folder = get_next_model_folder(\
-        '{}_{}_{}_{}'.format(args.mode, pretrain_str, args.frame_num, args.period), \
+        '{}_{}_{}_{}'.format(args.type, pretrain_str, args.frame_num, args.period), \
                     output_folder, args.run)
     try:
         os.mkdir(model_store_folder)
@@ -731,21 +752,36 @@ if __name__ == "__main__":
 
 
         else:
-            # net = construct_3d_enc(args.encoder_model, args.encoder_pretrained, \
-            #     args.projection_size, 'projection_head')
+            net = construct_3d_enc(args.encoder_model, args.encoder_pretrained, \
+                args.projection_size, 'projection_head')
 
-            net = models_2d.Encoder('resnet18', args.encoder_pretrained, 128)
+            # net = models_2d.Encoder('resnet18', args.encoder_pretrained, 128)
             if device.type == "cuda":
                 net = torch.nn.DataParallel(net)
         
             # criterion = losses.NTXentLoss(temperature=args.tau) * args.frame_num
             criterion = NTXentLoss(device, args.batch_size , args.tau,\
              args.similarity, args.projection_size).to(device)
-            optim_ssl = optimizer(net, args)
+            criterion2 = NTXentLoss(device, args.batch_size , args.tau,\
+             args.similarity, args.projection_size).to(device)
+            criterion3 = NTXentLoss(device, args.batch_size , args.tau,\
+             args.similarity, args.projection_size).to(device)
+            criterion4 = NTXentLoss(device, args.batch_size , args.tau,\
+             args.similarity, args.projection_size).to(device)
+            criterion5 = NTXentLoss(device, args.batch_size , args.tau,\
+             args.similarity, args.projection_size).to(device)
+            
+
+            params = list(net.parameters()) #+ list(criterion.parameters()) + \
+                    # list(criterion2.parameters()) + \
+                    # list(criterion3.parameters()) + list(criterion4.parameters()) + \
+                    # list(criterion5.parameters()) 
+
+            optim_ssl = optim.SGD(params, lr=1e-4, momentum=0.9, weight_decay=1e-4)
 
             scheduler = torch.optim.lr_scheduler.StepLR(optim_ssl, math.inf)
 
-            epoch_start = 0
+            epoch_start = 1
             
             net = net.to(device)
             inspect_model(net)
@@ -756,12 +792,14 @@ if __name__ == "__main__":
                                     scheduler=None, csv_path=simclr_stats_csv_path)
                 print("Starting from epoch: ", epoch_start)
 
-            print("\nStart training simCLR 2D!\n")
+            # print("\nStart training simCLR 2D!\n")
+            print("\nStart training simCLR 3D!\n")
             scaler = GradScaler()
             bestLoss = float("inf")
-            for epoch in range(epoch_start, 1000):
-                epoch_loss = Simclr_2d(net, epoch, criterion, optim_ssl, trainloader, scaler)
-                # epoch_loss, running_loss = SimCLR(net, epoch, criterion, optim_ssl, trainloader, args, scaler)
+            for epoch in range(epoch_start, 1001):
+                # epoch_loss = Simclr_2d(net, epoch, criterion, criterion2, criterion3, criterion4,
+                #                         criterion5, optim_ssl, trainloader, scaler)
+                epoch_loss, running_loss = SimCLR(net, epoch, criterion, optim_ssl, trainloader, args, scaler)
                 
                 print('epoch {} average loss : {}'.format(epoch, epoch_loss))
                 # if epoch%5==0:
@@ -776,31 +814,32 @@ if __name__ == "__main__":
                 write_csv_stats(simclr_stats_csv_path, stats)
 
                 if epoch_loss < bestLoss:
-                    checkpoint(net, model_store_folder, epoch, "best_simclr_2d", args.period, args.frame_num,\
+                    checkpoint(net, model_store_folder, epoch, "best_simclr_3d", args.period, args.frame_num,\
                                 bestLoss, epoch_loss, 0, optim_ssl, scheduler)
                     bestLoss = epoch_loss
 
                 if epoch % 100 == 0:
-                    checkpoint(net, model_store_folder, epoch, "best_simclr_2d_{}".format(epoch), args.period, args.frame_num,\
+                    checkpoint(net, model_store_folder, epoch, "best_simclr_3d_{}".format(epoch), args.period, args.frame_num,\
                                 bestLoss, epoch_loss, 0, optim_ssl, scheduler)
 
             
             print("simCLR training completed!")
     
     else:
-        if args.mode == '2d' or args.mode == 'cpc' or args.mode == 'ssl':
+        if args.mode == 'fine_tune':
             net = models_2d.Classifier_2D('resnet18', args.encoder_pretrained)
             if device.type == "cuda":
                 net = torch.nn.DataParallel(net)
                 net = net.to(device)
 
             criterion = torch.nn.BCELoss()
+            # optimizer = optim.Adam(ner.parameters(), lr=1e-4, betas=(args.beta1, args.beta2))
             optimizer = optim.SGD(net.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-4)
             scaler = GradScaler()
 
             epoch_start = 0
             bestLoss = float("inf")
-            load_model(model_store_folder, args.checkpoint, net, "best_simclr_2d_200", optim=None, csv_path = regressor_stats_csv_path)
+            # load_model(model_store_folder, args.checkpoint, net, "best_simclr_2d_100", optim=None, csv_path = regressor_stats_csv_path)
             # epoch_start = load_model(model_store_folder, args.checkpoint, regressor, "best_regressor", optim=reg_optimizer, csv_path = regressor_stats_csv_path)
 
             print("\nStart training 2d classifier!\n")
@@ -870,7 +909,7 @@ if __name__ == "__main__":
             con_optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9, weight_decay=1e-4)
             # scheduler = torch.optim.lr_scheduler.StepLR(reg_optimizer, math.inf)
             epoch_start = 0
-            load_model(model_store_folder, args.checkpoint, net, "best_simclr_300", optim=con_optimizer, csv_path = regressor_stats_csv_path)
+            load_model(model_store_folder, args.checkpoint, net, "best_simclr_3d_50", optim=con_optimizer, csv_path = regressor_stats_csv_path)
             # epoch_start = load_model(model_store_folder, args.checkpoint, regressor, "best_regressor", optim=reg_optimizer, csv_path = regressor_stats_csv_path)
 
             print("\nStart training Regressor!\n")
