@@ -404,81 +404,38 @@ def SimCLR(net, epoch, criterion_ssl, optimizer, trainloader, args,\
     yhat = []
     y = []
 
-    if args.mode == "multi":
-        # for (i, (b1, b2, labels)) in enumerate(trainloader):
-        for (i, (b1, b2, targets)) in enumerate(tqdm.tqdm(trainloader)):
-            # b1 = b1.to(device)
-            # b2 = b2.to(device)      
-            targets = targets.to(device)
-
-            optimizer.zero_grad()
-            x_1 = b1#torch.zeros_like(b1).cuda()
-            x_2 = b2#torch.zeros_like(b2).cuda()
-            with torch.set_grad_enabled(True):
-                with autocast():
-                    # for idx, (x1, x2) in enumerate(zip(b1, b2)):
-                    #     x1 = get_image_patch_tensor_from_video_batch(x1)
-                    #     x2 = get_image_patch_tensor_from_video_batch(x2)
-
-                    #     x_1[idx] = data_augment(x1)
-                    #     x_2[idx] = data_augment(x2)
-
-                    _, out_1 = net(x_1.to(device))
-                    _, out_2 = net(x_2.to(device))
-                    out_1 = F.normalize(out_1, dim=1)
-                    out_2 = F.normalize(out_2, dim=1)
-                    
-                    indices = torch.arange(0, out_1.size(0), device=out_1.device)
-                    labels = torch.cat((indices, indices))
-                out_3, _ = net(b1)
-                out_3 = regressor(out_3)
-
-                loss_ssl = criterion_ssl(torch.cat([out_1.float(), out_2.float()], dim=0), labels)
-                loss_sup = criterion_sup(out_3.view(-1).float(), targets.float())
-                loss = 10 * loss_ssl + loss_sup
-
-                loss_meter.update(loss.item())
-
-                scaler.scale(loss).backward()
-                # loss.backward()
-                scaler.step(optimizer)
-                scaler.update()
-                # optimizer.step()
-                # print(loss.item())
-                running_loss += loss.item()
-
-                yhat.append(out_3.view(-1).to("cpu").detach().numpy())
-                y.append(targets.to("cpu").numpy())
-
-        r2 = sklearn.metrics.r2_score(yhat, y)
-
-        return loss_meter.average(), r2
-
-    elif args.mode == "ssl":
+    
+    if args.mode == "ssl":
         # for (i, (b1, b2, _)) in enumerate(trainloader):
-        for (i, (b1, b2, *_)) in enumerate(tqdm.tqdm(trainloader)):
+        for (i, (b1, b2, b3, *_)) in enumerate(tqdm.tqdm(trainloader)):
 
             optimizer.zero_grad()
             x_1 = torch.zeros_like(b1).cuda()
             x_2 = torch.zeros_like(b2).cuda()
+            x_3 = torch.zeros_like(b3).cuda()
             with autocast():
-                for idx, (x1, x2) in enumerate(zip(b1, b2)):
+                for idx, (x1, x2, x3) in enumerate(zip(b1, b2, b3)):
                     x1 = get_image_patch_tensor_from_video_batch(x1)
                     x2 = get_image_patch_tensor_from_video_batch(x2)
+                    x3 = get_image_patch_tensor_from_video_batch(x3)
 
                     x_1[idx] = data_augment(x1)
                     x_2[idx] = data_augment(x2)
+                    x_3[idx] = data_augment(x3)
 
                 _, out_1 = net(x_1.to(device))
                 _, out_2 = net(x_2.to(device))
+                _, out_3 = net(x_3.to(device))
+
                 out_1 = F.normalize(out_1, dim=1)
                 out_2 = F.normalize(out_2, dim=1)
+                out_3 = F.normalize(out_3, dim=1)
                 
                 # indices = torch.arange(0, out_1.size(0), device=out_1.device)
                 # labels = torch.cat((indices, indices))
 
             # loss = criterion_ssl(torch.cat([out_1.float(), out_2.float()], dim=0), labels)
-            loss = criterion_ssl(out_1.float(), out_2.float())
+            loss = criterion_ssl(out_1.float(), out_2.float(), out_3.float())
             loss_meter.update(loss.item())
 
             scaler.scale(loss).backward()
@@ -762,14 +719,14 @@ if __name__ == "__main__":
             # criterion = losses.NTXentLoss(temperature=args.tau) * args.frame_num
             criterion = NTXentLoss(device, args.batch_size , args.tau,\
              args.similarity, args.projection_size).to(device)
-            criterion2 = NTXentLoss(device, args.batch_size , args.tau,\
-             args.similarity, args.projection_size).to(device)
-            criterion3 = NTXentLoss(device, args.batch_size , args.tau,\
-             args.similarity, args.projection_size).to(device)
-            criterion4 = NTXentLoss(device, args.batch_size , args.tau,\
-             args.similarity, args.projection_size).to(device)
-            criterion5 = NTXentLoss(device, args.batch_size , args.tau,\
-             args.similarity, args.projection_size).to(device)
+            # criterion2 = NTXentLoss(device, args.batch_size , args.tau,\
+            #  args.similarity, args.projection_size).to(device)
+            # criterion3 = NTXentLoss(device, args.batch_size , args.tau,\
+            #  args.similarity, args.projection_size).to(device)
+            # criterion4 = NTXentLoss(device, args.batch_size , args.tau,\
+            #  args.similarity, args.projection_size).to(device)
+            # criterion5 = NTXentLoss(device, args.batch_size , args.tau,\
+            #  args.similarity, args.projection_size).to(device)
             
 
             params = list(net.parameters()) #+ list(criterion.parameters()) + \
@@ -818,7 +775,7 @@ if __name__ == "__main__":
                                 bestLoss, epoch_loss, 0, optim_ssl, scheduler)
                     bestLoss = epoch_loss
 
-                if epoch % 100 == 0:
+                if epoch % 50 == 0:
                     checkpoint(net, model_store_folder, epoch, "best_simclr_3d_{}".format(epoch), args.period, args.frame_num,\
                                 bestLoss, epoch_loss, 0, optim_ssl, scheduler)
 
@@ -909,7 +866,7 @@ if __name__ == "__main__":
             con_optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9, weight_decay=1e-4)
             # scheduler = torch.optim.lr_scheduler.StepLR(reg_optimizer, math.inf)
             epoch_start = 0
-            load_model(model_store_folder, args.checkpoint, net, "best_simclr_3d_50", optim=con_optimizer, csv_path = regressor_stats_csv_path)
+            load_model(model_store_folder, args.checkpoint, net, "best_simclr_3d_100", optim=con_optimizer, csv_path = regressor_stats_csv_path)
             # epoch_start = load_model(model_store_folder, args.checkpoint, regressor, "best_regressor", optim=reg_optimizer, csv_path = regressor_stats_csv_path)
 
             print("\nStart training Regressor!\n")

@@ -58,10 +58,30 @@ class NTXentLoss(torch.nn.Module):
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
 
-    def forward(self, zis, zjs):
+    def forward(self, zis, zjs, zks=None):
         representations = torch.cat([zjs, zis], dim=0)
+        if zks != None:
+            representations2 = torch.cat([zks, zis], dim=0)
+            representations3 = torch.cat([zks, zjs], dim=0)
 
         similarity_matrix = self.similarity_function(representations, representations)
+        if zks != None:
+            similarity_matrix2 = self.similarity_function(representations2, representations2)
+            similarity_matrix3 = self.similarity_function(representations3, representations3)
+
+            # filter out the scores from the positive samples
+            l_pos = torch.diag(similarity_matrix2, self.batch_size)
+            r_pos = torch.diag(similarity_matrix2, -self.batch_size)
+            positives2 = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
+
+            negatives2 = similarity_matrix2[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
+
+            # filter out the scores from the positive samples
+            l_pos = torch.diag(similarity_matrix3, self.batch_size)
+            r_pos = torch.diag(similarity_matrix3, -self.batch_size)
+            positives3 = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
+
+            negatives3 = similarity_matrix3[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
 
         # filter out the scores from the positive samples
         l_pos = torch.diag(similarity_matrix, self.batch_size)
@@ -70,10 +90,16 @@ class NTXentLoss(torch.nn.Module):
 
         negatives = similarity_matrix[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)
 
+        if zks != None:
+            positives = torch.cat([positives, positives2, positives3], dim=0)
+            negatives = torch.cat([negatives, negatives2, negatives3], dim=0)
+
         logits = torch.cat((positives, negatives), dim=1)
         logits /= self.temperature
 
         labels = torch.zeros(2 * self.batch_size).to(self.device).long()
+        if zks != None:
+            labels = torch.zeros(6 * self.batch_size).to(self.device).long()
         loss = self.criterion(logits, labels)
 
         return loss / (2 * self.batch_size)

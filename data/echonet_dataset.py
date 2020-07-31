@@ -159,8 +159,8 @@ class EchoDataset(torch.utils.data.Dataset):
             # print(f)
             # print(s)
             start = np.random.choice(s, self.crops)
-            start2 = [s + 5 for s in start]
-            # start3 = [s + 10 for s in start]
+            start2 = np.random.choice(s, self.crops)
+            start3 = np.random.choice(s, self.crops)
             # start4 = [s + 15 for s in start]
             # start5 = [s + 20 for s in start]
             # start6 = [s + 25 for s in start]
@@ -212,7 +212,7 @@ class EchoDataset(torch.utils.data.Dataset):
         if self.ssl == True:
             try:
                 video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
-                # video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
+                video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
                 # video4 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start4)
                 # video5 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start5)
                 # video6 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start6)
@@ -220,8 +220,8 @@ class EchoDataset(torch.utils.data.Dataset):
             except:
                 start2 = [s - 5 for s in start]
                 video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
-                # start3 = [s - 10 for s in start]
-                # video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
+                start3 = [s - 10 for s in start]
+                video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
                 # start4 = [s - 15 for s in start]
                 # video4 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start4)
                 # start5 = [s - 20 for s in start]
@@ -234,7 +234,7 @@ class EchoDataset(torch.utils.data.Dataset):
             video = video1[0]
             if self.ssl == True:
                 video2 = video2[0]
-                # video3 = video3[0]
+                video3 = video3[0]
                 # video4 = video4[0]
                 # video5 = video5[0]
                 # video6 = video6[0]
@@ -255,16 +255,16 @@ class EchoDataset(torch.utils.data.Dataset):
                 i, j = np.random.randint(0, 2 * self.pad, 2)
                 video2 = temp[:, :, i:(i + h), j:(j + w)]
 
-                # c, l, h, w = video3.shape
-                # temp = np.zeros((c, l, h + 2 * self.pad, w + 2 * self.pad), dtype=video3.dtype)
-                # temp[:, :, self.pad:-self.pad, self.pad:-self.pad] = video3
-                # i, j = np.random.randint(0, 2 * self.pad, 2)
-                # video3 = temp[:, :, i:(i + h), j:(j + w)]
+                c, l, h, w = video3.shape
+                temp = np.zeros((c, l, h + 2 * self.pad, w + 2 * self.pad), dtype=video3.dtype)
+                temp[:, :, self.pad:-self.pad, self.pad:-self.pad] = video3
+                i, j = np.random.randint(0, 2 * self.pad, 2)
+                video3 = temp[:, :, i:(i + h), j:(j + w)]
 
         
         target = 1 if target < 50 else 0
         if self.ssl == True:
-            return video, video2, target #video3, video4, video5, video6
+            return video, video2, video3, target #, video4, video5, video6
 
         return video, target
 
