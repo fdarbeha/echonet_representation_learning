@@ -8,4 +8,4 @@
 #SBATCH --mem=10G		# memory per node
 #SBATCH --cpus-per-task=8	# CPU cores/threads
 
-python /home/fdarbeha/scratch/echonet_representation_learning/main.py --eval True --mode tsne --type 3d --run 3 --checkpoint 200 --batch_size 20
+python main.py --eval True --mode fine-tune --type PaSTSSL --run 1 --checkpoint 200 --batch_size 40

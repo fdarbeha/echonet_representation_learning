@@ -548,7 +548,7 @@ if __name__ == "__main__":
 
     pretrain_str = 'pretrained' if args.encoder_pretrained else 'random'
     model_store_folder = get_next_model_folder(\
-        '{}_{}_{}_{}'.format(args.type, pretrain_str, args.frame_num, args.period), \
+        '{}_{}'.format(args.type, pretrain_str,), \
                     output_folder, args.run)
     try:
         os.mkdir(model_store_folder)
@@ -656,7 +656,7 @@ if __name__ == "__main__":
             
             print("AutoEncoder training completed!")
 
-        else:
+        if args.mode == "pastssl":
             net = construct_3d_enc(args.encoder_model, args.encoder_pretrained, \
                 args.projection_size, 'projection_head')
 
