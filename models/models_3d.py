@@ -17,8 +17,6 @@ class ENC3D(nn.Module):
 						(pretrained=pretrained)
 
 		self.features = nn.Sequential(*list(enc_3d.children())[:-1])
-		
-		# self.enc_3d.fc = torch.nn.Linear(self.enc_3d.fc.in_features, z_dimension)
 		self.num_ftrs = enc_3d.fc.in_features
 
 		# projection MLP
@@ -31,7 +29,7 @@ class ENC3D(nn.Module):
 		h = self.features(x) #512
 		h = h.squeeze()
 
-		# if self.mode == 'projection_head':
+		
 		h_p = self.l1(h)
 		h_p = F.relu(h_p)
 		h_p = self.l2(h_p)
@@ -55,7 +53,6 @@ class LinearRegressor(nn.Module):
 
 	@autocast()
 	def forward(self, x):
-		# out = x.view(-1)
 		out = x
 		out = self.activation(self.regressor1(out))
 

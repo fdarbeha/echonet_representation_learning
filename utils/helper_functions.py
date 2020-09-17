@@ -14,7 +14,7 @@ to_tensor = transforms.ToTensor()
 
 def get_next_model_folder(prefix, path = '', run=None):
 
-    model_folder = lambda prefix, run_idx: f"{prefix}_echonet_run_{run_idx}"
+    model_folder = lambda prefix, run_idx: f"{prefix}_run_{run_idx}"
     if run == None:
         run_idx = 1
         while os.path.isdir(os.path.join(path, model_folder(prefix, run_idx))):

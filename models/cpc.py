@@ -94,7 +94,6 @@ class CPC(torch.nn.Module):
 
 	def reshape_input_rnn(self, x):
 		x = x.view(-1, 32, 512);
-		# print(x.shape)
 		return x
 
 	def forward(self, x):

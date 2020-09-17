@@ -37,9 +37,9 @@ class NTXentLoss(torch.nn.Module):
     @staticmethod
     def _dot_simililarity(x, y):
         v = torch.tensordot(x.unsqueeze(1), y.T.unsqueeze(0), dims=2)
-        # x shape: (N, 1, C)
+        # x shape: (2N, 1, C)
         # y shape: (1, C, 2N)
-        # v shape: (N, 2N)
+        # v shape: (2N, 2N)
         return v
 
     def _bilinear_inner_product(self, x, y):
@@ -52,9 +52,9 @@ class NTXentLoss(torch.nn.Module):
         return v
 
     def _cosine_simililarity(self, x, y):
-        # x shape: (N, 1, C)
+        # x shape: (2N, 1, C)
         # y shape: (1, 2N, C)
-        # v shape: (N, 2N)
+        # v shape: (2N, 2N)
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
 
