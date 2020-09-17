@@ -18,6 +18,7 @@ Download our pretrianed model best_pastssl_3d_200.pth from https://drive.google.
 and place it under output/PaSTSSL_r3d_18_pretrained_run1/
 
 To fine-tune run the eval.sh script
+
 To train your sself-supervised model run train.sh
 
 
