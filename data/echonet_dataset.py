@@ -7,7 +7,7 @@ import skimage.draw
 import tqdm
 import cv2
 
-DATA_DIR = 'PATH/TO/DATA/FOLDER'
+DATA_DIR = '/home/fdarbeha/projects/def-wanglab/EchoNet/data'
 
 class EchoDataset(torch.utils.data.Dataset):
     def __init__(self, root=None,
@@ -54,7 +54,7 @@ class EchoDataset(torch.utils.data.Dataset):
 
                 fileName = lineSplit[filenameIndex]
                 fileMode = lineSplit[splitIndex].lower()
-
+                
                 if (split == "all" or split == fileMode) and os.path.exists(self.folder / "Videos" / fileName):
                     self.fnames.append(fileName)
                     self.outcome.append(lineSplit) # entire line will be the outcome
@@ -62,14 +62,33 @@ class EchoDataset(torch.utils.data.Dataset):
             self.frames = collections.defaultdict(list) #frames is a dictionary
             self.trace = collections.defaultdict(_defaultdict_of_lists) #2D dictionary
 
+            with open(self.folder / "VolumeTracings.csv") as f:
+                header = f.readline().strip().split(",")
+                assert header == ["FileName", "X1", "Y1", "X2", "Y2", "Frame"]
+
+                for line in f:
+                    filename, x1, y1, x2, y2, frame = line.strip().split(',')
+                    x1 = float(x1)
+                    y1 = float(y1)
+                    x2 = float(x2)
+                    y2 = float(y2)
+                    frame = int(frame)
+                    if frame not in self.trace[filename]:
+                        self.frames[filename].append(frame)
+                    self.trace[filename][frame].append((x1, y1, x2, y2))
+            for filename in self.frames:
+                for frame in self.frames[filename]:
+                    self.trace[filename][frame] = np.array(self.trace[filename][frame])
 
             keep = [len(self.frames[os.path.splitext(f)[0]]) >= 2 and f != "0X4F55DC7F6080587E.avi" for f in self.fnames]
             self.fnames = [f for (f, k) in zip(self.fnames, keep) if k]
             self.outcome = [f for (f, k) in zip(self.outcome, keep) if k]
+            
 
+            
             if ssl == False and split == 'train':
-                self.fnames = self.fnames[:int(0.2 * len(self.fnames))]
-                self.outcome = self.outcome[:int(0.2 * len(self.outcome))]
+                self.fnames = self.fnames[:int(1 * len(self.fnames))]
+                self.outcome = self.outcome[:int(1 * len(self.outcome))]
             
 
     def __getitem__(self, index):
@@ -105,15 +124,18 @@ class EchoDataset(torch.utils.data.Dataset):
             start = np.arange(f - (length - 1) * self.period)
         else:
             if self.ssl == True:
-                s = (f - (length - 1) * self.period)# - 25
+                s = (f - ((length - 1) * self.period) * 3)
+                s = max(s, 1)
             else:
                 s = (f - (length - 1) * self.period)
 
-            start = np.random.choice(s, self.crops)
-            start2 = np.random.choice(s, self.crops)
-            start3 = np.random.choice(s, self.crops)
+            a = np.sort(np.random.choice(s, 1))
+            # a = [s]
 
-            
+            start = [a[0]]
+            start2 = [a[0] + (length - 1) * self.period]#[a[1]]
+            start3 = [a[0] + ((length - 1) * self.period)*2]
+
 
         target = []
         for t in self.target_type:
@@ -130,10 +152,21 @@ class EchoDataset(torch.utils.data.Dataset):
             
         
             except:
-                start2 = [s - 5 for s in start]
-                video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
-                start3 = [s - 10 for s in start]
-                video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
+                try:
+                    # print("S: ", s)
+                    # print("Start: ", start)
+                    # print("frame number:", f)
+                    start2 = [s + 1 for s in start]
+                    # print("start2: ", start2)
+                    video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
+                    start3 = [s + 2 for s in start]
+                    video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
+                except:
+                    start2 = start
+                    video2 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start2)
+                    start3 = start
+                    video3 = tuple(video[:, s + self.period * np.arange(length), :, :] for s in start3)
+
                
 
 
@@ -166,8 +199,8 @@ class EchoDataset(torch.utils.data.Dataset):
                 i, j = np.random.randint(0, 2 * self.pad, 2)
                 video3 = temp[:, :, i:(i + h), j:(j + w)]
 
-        
-        target = 1 if target < 50 else 0
+        # print(target)
+        target = 1 if target[0] < 50 else 0
         if self.ssl == True:
             return video, video2, video3, target 
 
@@ -214,7 +247,7 @@ def get_train_and_test_echonet_datasets(tasks="EF", frames=16, period=4, ssl=Fal
     """
 
 
-    mean, std = get_mean_and_std(EchoDataset(split="train"), 'train')
+    mean, std = get_mean_and_std(EchoDataset(ssl=ssl, split="train"), 'train')
 
     kwargs = {"target_type": tasks,
               "mean": mean,

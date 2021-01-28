@@ -242,6 +242,55 @@ def collate_fn(data):
 
     return targets, labels, lengths
 
+def collate_fn_ssl(data):
+    data.sort(key=lambda x: x[0].shape[1], reverse=True)
+
+    images, labels, patient = zip(*data)
+
+
+    # Merge labels (from tuple of 1 tensor to 2D tensor).
+    labels = torch.stack(labels, 0)
+
+    # Merge images (from tuple of 4D tensor to 6D tensor).
+    lengths = [img.shape[1] for img in images]
+    total_length = sum(lengths)
+    batch_size = len(images)
+    print(lengths)
+
+    list_of_imgs1 = []
+    list_of_imgs2 = []
+    list_of_imgs3 = []
+
+    for i, img in enumerate(images):
+        end = lengths[i]
+        index = np.sort(np.random.randint(end, size=3))
+        print(index)
+        # print(end)
+        list_of_imgs1.append(img[:, index[0], :, :, :]) # first visit
+        if end > 1:
+            list_of_imgs2.append(img[:, index[1], :, :, :]) # second visit
+        else:
+            list_of_imgs2.append(img[:, 0, :, :, :]) # put first visit again
+
+        if end > 2:
+            list_of_imgs3.append(img[:, index[2], :, :, :]) # second visit
+        else:
+            list_of_imgs3.append(img[:, 0, :, :, :]) # put first visit again
+
+            # print(list_of_imgs[i].shape)
+    targets1 = torch.stack(list_of_imgs1)
+    targets2 = torch.stack(list_of_imgs2)
+    targets3 = torch.stack(list_of_imgs3)
+    # print(targets2.shape)
+    targets1 = targets1.permute(0, 1, 4, 2, 3)
+    targets2 = targets2.permute(0, 1, 4, 2, 3)
+    targets3 = targets3.permute(0, 1, 4, 2, 3)
+    # targets = torch.autograd.Variable(targets.var)
+    lengths = torch.tensor(lengths)
+
+    return targets1, targets2, targets3, labels, lengths#, patient
+
+
 def get_mean_and_std(dataset, split, samples=100):
     if len(dataset) > samples:
         dataset = torch.utils.data.Subset(dataset, np.random.choice(len(dataset), samples, replace=False))

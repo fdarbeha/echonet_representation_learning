@@ -11,7 +11,7 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.utils.data as data
 
-from pytorch_metric_learning import losses
+# from pytorch_metric_learning import losses
 from torchvideotransforms import video_transforms, volume_transforms
 
 import sklearn.metrics
@@ -47,7 +47,7 @@ def dataloader(batch_size, mode, args):
     trainloader, valloader, testloader = None, None, None
     if args.dataset.lower() == 'echonet':
         ssl = False
-        if args.eval == False and (mode == "ssl" or mode == "multi" or mode == "cpc"):
+        if args.eval == False and (mode == "pastssl" or mode == "cpc"):
             ssl = True
 
         trainset, valset, testset = get_train_and_test_echonet_datasets("EF", frames=args.frame_num,\
@@ -233,42 +233,41 @@ def train_PaSTSSL_echonet(net, epoch, criterion_ssl, optimizer, trainloader, arg
     y = []
 
     
-    if args.mode == "ssl":
-        # for (i, (b1, b2, _)) in enumerate(trainloader):
-        for (i, (b1, b2, b3, *_)) in enumerate(tqdm.tqdm(trainloader)):
+    # for (i, (b1, b2, _)) in enumerate(trainloader):
+    for (i, (b1, b2, b3, *_)) in enumerate(tqdm.tqdm(trainloader)):
 
-            optimizer.zero_grad()
-            x_1 = torch.zeros_like(b1).cuda()
-            x_2 = torch.zeros_like(b2).cuda()
-            x_3 = torch.zeros_like(b3).cuda()
-            with autocast():
-                for idx, (x1, x2, x3) in enumerate(zip(b1, b2, b3)):
-                    x1 = get_image_patch_tensor_from_video_batch(x1)
-                    x2 = get_image_patch_tensor_from_video_batch(x2)
-                    x3 = get_image_patch_tensor_from_video_batch(x3)
+        optimizer.zero_grad()
+        x_1 = torch.zeros_like(b1).cuda()
+        x_2 = torch.zeros_like(b2).cuda()
+        x_3 = torch.zeros_like(b3).cuda()
+        with autocast():
+            for idx, (x1, x2, x3) in enumerate(zip(b1, b2, b3)):
+                x1 = get_image_patch_tensor_from_video_batch(x1)
+                x2 = get_image_patch_tensor_from_video_batch(x2)
+                x3 = get_image_patch_tensor_from_video_batch(x3)
 
-                    x_1[idx] = data_augment(x1)
-                    x_2[idx] = data_augment(x2)
-                    x_3[idx] = data_augment(x3)
+                x_1[idx] = data_augment(x1)
+                x_2[idx] = data_augment(x2)
+                x_3[idx] = data_augment(x3)
 
-                _, out_1 = net(x_1.to(device))
-                _, out_2 = net(x_2.to(device))
-                _, out_3 = net(x_3.to(device))
+            _, out_1 = net(x_1.to(device))
+            _, out_2 = net(x_2.to(device))
+            _, out_3 = net(x_3.to(device))
 
-                out_1 = F.normalize(out_1, dim=1)
-                out_2 = F.normalize(out_2, dim=1)
-                out_3 = F.normalize(out_3, dim=1)
-                
-                
-            loss = criterion_ssl(out_1.float(), out_2.float(), out_3.float())
-            loss_meter.update(loss.item())
+            out_1 = F.normalize(out_1, dim=1)
+            out_2 = F.normalize(out_2, dim=1)
+            out_3 = F.normalize(out_3, dim=1)
+            
+            
+        loss = criterion_ssl(out_1.float(), out_2.float(), out_3.float())
+        loss_meter.update(loss.item())
 
-            scaler.scale(loss).backward()
-           
-            scaler.step(optimizer)
-            scaler.update()
-           
-            running_loss += loss.item()
+        scaler.scale(loss).backward()
+       
+        scaler.step(optimizer)
+        scaler.update()
+       
+        running_loss += loss.item()
 
 
     return loss_meter.average(), running_loss
@@ -314,7 +313,7 @@ def train_PaSTSSL_oasis(net, epoch, criterion, optimizer, trainloader, scaler):
 
     return loss_meter.average()
 
-    def train_supervise_oasis(cnn, rnn, epoch, criterion, optimizer, trainloader, scaler):
+def train_supervise_oasis(cnn, rnn, epoch, criterion, optimizer, trainloader, scaler):
     loss_meter = AverageMeter()
     running_loss = 0
     cnn.train()
@@ -516,7 +515,7 @@ if __name__ == "__main__":
     # optimization related arguments
     parser.add_argument('--batch_size', default=40, type=int,
                         help='input batch size')
-    parser.add_argument('--num_workers', default=4, type=int,
+    parser.add_argument('--num_workers', default=3, type=int,
                         help='num workers')
     parser.add_argument('--epoch', default=45, type=int,
                         help='epochs to train for')
@@ -739,7 +738,7 @@ if __name__ == "__main__":
         if args.mode == 'fine-tune':
             net = construct_3d_enc(args.encoder_model, args.encoder_pretrained, \
                 args.projection_size, 'representation')
-            # inspect_model(net)
+            inspect_model(net)
 
             if device.type == "cuda":
                 net = torch.nn.DataParallel(net)
@@ -751,7 +750,6 @@ if __name__ == "__main__":
             # scheduler = torch.optim.lr_scheduler.StepLR(reg_optimizer, math.inf)
             epoch_start = 0
             bestLoss = float("inf")
-            load_model(model_store_folder, args.checkpoint, net, "best_pastssl_3d_200", optim=con_optimizer, csv_path = regressor_stats_csv_path)
 
 
             print("\nStart Finetuning!\n")
@@ -765,6 +763,8 @@ if __name__ == "__main__":
 
                 reg_optimizer = optimizer(regressor, args)
                 con_optimizer = optimizer(net, args)
+
+                load_model(model_store_folder, args.checkpoint, net, "best_pastssl_3d_200", optim=con_optimizer, csv_path = regressor_stats_csv_path)
 
                 
                 for epoch in range(epoch_start, 45):
@@ -805,6 +805,8 @@ if __name__ == "__main__":
 
                 params = list(net.parameters()) + list(rnn.parameters())
                 optimizer = optim.Adam(params, lr=args.lr, betas=(args.beta1, args.beta2))
+
+                load_model(model_store_folder, args.checkpoint, net, "best_pastssl_3d_100", optim=optimizer, csv_path = regressor_stats_csv_path)
 
                 for epoch in range(1, 46):
                     train_loss, train_auc = train_supervise_oasis(net, rnn, epoch, criterion, optimizer, trainloader, scaler)
